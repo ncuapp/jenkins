@@ -1,4 +1,9 @@
 version: '3'
+
+networks:
+  backend:
+    driver: bridge
+
 services:
   jenkins:
     restart: always
@@ -12,3 +17,51 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/bin/docker:/usr/bin/docker
       - /usr/lib/x86_64-linux-gnu/libltdl.so.7:/usr/lib/x86_64-linux-gnu/libltdl.so.7
+
+  nginx:
+    restart: always
+    container_name: service_nginx
+    build:
+      context: ./nginx/
+      dockerfile: ./Dockerfile
+    image: nginx
+    depends_on:
+      - phpmyadmin
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/cert:/etc/nginx/cert
+      - ./logs/nginx:/var/log/nginx
+    networks:
+      - backend
+
+  mysql:
+    image: mysql
+    container_name: mysql
+    command: /usr/local/bin/docker-entrypoint.sh --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - "./mysql/databases:/var/lib/mysql"
+      - "./mysql/init:/docker-entrypoint-initdb.d"
+    environment:
+      - MYSQL_ROOT_PASSWORD=
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+
+  phpmyadmin:
+    build:
+      context: ./phpmyadmin/
+      dockerfile: ./Dockerfile
+    container_name: phpmyadmin
+    depends_on:
+      - mysql
+    restart: always
+    networks:
+      - backend
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+      - PMA_ARBITRARY=1
+      - PMA_ABSOLUTE_URI=/phpmyadmin
